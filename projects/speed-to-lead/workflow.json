@@ -1,0 +1,448 @@
+{
+  "id": "GstgtVYxyhRZLYZz",
+  "name": "Speed-to-Lead AI Qualification & CRM Auto-Router",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "nodes": [
+    {
+      "id": "414b8212-7f43-4dae-b46c-caed1f965808",
+      "name": "Lead Intake Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [200, 300],
+      "parameters": {
+        "authentication": "none",
+        "formTitle": "Lead Qualification Request",
+        "formDescription": "Tell us about your company and what you need. High-fit requests are routed to the sales team automatically.",
+        "formFields": {
+          "values": [
+            { "fieldLabel": "Full name", "fieldName": "name", "fieldType": "text", "placeholder": "Jane Doe", "requiredField": true },
+            { "fieldLabel": "Work email", "fieldName": "email", "fieldType": "email", "placeholder": "jane@company.com", "requiredField": true },
+            { "fieldLabel": "Company", "fieldName": "company", "fieldType": "text", "placeholder": "Company name", "requiredField": true },
+            {
+              "fieldLabel": "Company size",
+              "fieldName": "company_size",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "1-10" },
+                  { "option": "11-50" },
+                  { "option": "51-200" },
+                  { "option": "201-500" },
+                  { "option": "501+" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Estimated budget",
+              "fieldName": "budget",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "Under $1k" },
+                  { "option": "$1k-$5k" },
+                  { "option": "$5k-$10k" },
+                  { "option": "$10k+" },
+                  { "option": "Not sure yet" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Timeline / urgency",
+              "fieldName": "urgency",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  { "option": "ASAP" },
+                  { "option": "This month" },
+                  { "option": "This quarter" },
+                  { "option": "Exploring options" }
+                ]
+              }
+            },
+            { "fieldLabel": "What do you need help with?", "fieldName": "message", "fieldType": "textarea", "placeholder": "Briefly describe the project, challenge, or goal.", "requiredField": true }
+          ]
+        },
+        "responseMode": "onReceived",
+        "options": {
+          "path": "speed-to-lead",
+          "buttonLabel": "Submit request",
+          "appendAttribution": false,
+          "ignoreBots": true,
+          "respondWithOptions": {
+            "values": {
+              "respondWith": "text",
+              "formSubmittedText": "Thanks. Your request has been received."
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "6e5c8722-2b8c-4197-8845-91eadf823f7f",
+      "name": "Normalize Lead Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [460, 300],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            { "id": "name", "name": "name", "value": "={{ $json.body?.name ?? $json.name ?? \"\" }}", "type": "string" },
+            { "id": "email", "name": "email", "value": "={{ $json.body?.email ?? $json.email ?? \"\" }}", "type": "string" },
+            { "id": "company", "name": "company", "value": "={{ $json.body?.company ?? $json.company ?? \"\" }}", "type": "string" },
+            { "id": "company_size", "name": "company_size", "value": "={{ $json.body?.company_size ?? $json.company_size ?? \"\" }}", "type": "string" },
+            { "id": "budget", "name": "budget", "value": "={{ $json.body?.budget ?? $json.budget ?? \"\" }}", "type": "string" },
+            { "id": "urgency", "name": "urgency", "value": "={{ $json.body?.urgency ?? $json.urgency ?? \"\" }}", "type": "string" },
+            { "id": "message", "name": "message", "value": "={{ $json.body?.message ?? $json.message ?? \"\" }}", "type": "string" },
+            { "id": "raw_payload", "name": "raw_payload", "value": "={{ JSON.stringify($json.body ?? $json) }}", "type": "string" },
+            { "id": "received_at", "name": "received_at", "value": "={{ $now.toISO() }}", "type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "39eb6d2d-939a-4c3a-8202-720271bc100d",
+      "name": "Store Raw Lead in Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [740, 300],
+      "parameters": {
+        "resource": "record",
+        "operation": "upsert",
+        "authentication": "airtableTokenApi",
+        "base": { "__rl": true, "mode": "id", "value": "app_REPLACE_WITH_AIRTABLE_BASE_ID" },
+        "table": { "__rl": true, "mode": "id", "value": "tbl_REPLACE_WITH_LEADS_TABLE_ID" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": ["Email"],
+          "value": {
+            "Name": "={{ $json.name }}",
+            "Email": "={{ $json.email }}",
+            "Company": "={{ $json.company }}",
+            "Company Size": "={{ $json.company_size }}",
+            "Budget": "={{ $json.budget }}",
+            "Urgency": "={{ $json.urgency }}",
+            "Message": "={{ $json.message }}",
+            "Raw Payload": "={{ $json.raw_payload }}",
+            "Received At": "={{ $json.received_at }}",
+            "Status": "New"
+          },
+          "schema": [
+            { "id": "Name", "displayName": "Name", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Email", "displayName": "Email", "type": "string", "canBeUsedToMatch": true },
+            { "id": "Company", "displayName": "Company", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Company Size", "displayName": "Company Size", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Budget", "displayName": "Budget", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Urgency", "displayName": "Urgency", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Message", "displayName": "Message", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Raw Payload", "displayName": "Raw Payload", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Received At", "displayName": "Received At", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Status", "displayName": "Status", "type": "string", "canBeUsedToMatch": false }
+          ]
+        },
+        "options": { "typecast": true }
+      }
+    },
+    {
+      "id": "e5e7557e-42f5-4d9a-a6f5-f445d1ede70b",
+      "name": "Qualify Lead with AI",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [1020, 300],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Evaluate this inbound lead against the ICP and return structured JSON only. Lead: Name={{ $(\"Normalize Lead Fields\").item.json.name }}, Email={{ $(\"Normalize Lead Fields\").item.json.email }}, Company={{ $(\"Normalize Lead Fields\").item.json.company }}, Company Size={{ $(\"Normalize Lead Fields\").item.json.company_size }}, Budget={{ $(\"Normalize Lead Fields\").item.json.budget }}, Urgency={{ $(\"Normalize Lead Fields\").item.json.urgency }}, Message={{ $(\"Normalize Lead Fields\").item.json.message }}. Scoring guide: High means strong budget, meaningful company size, and urgent timeline. Medium means partial fit or unclear urgency/budget. Low means poor fit, no budget, non-buyer, spam, vendor, student, or low urgency.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a B2B speed-to-lead qualification assistant. Score inbound leads as High, Medium, or Low using budget, company size, urgency, and ICP fit. Return only the parser schema fields. Include concise reasoning and recommended next action.",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false
+        }
+      }
+    },
+    {
+      "id": "bfe7d66b-8381-4308-bf63-1ba3330d72d8",
+      "name": "OpenAI Lead Scoring Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [1020, 520],
+      "parameters": {
+        "model": { "__rl": true, "mode": "id", "value": "gpt-5-mini" },
+        "responsesApiEnabled": true,
+        "options": {
+          "temperature": 0.1,
+          "reasoningEffort": "low",
+          "maxRetries": 2,
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "2b1c2149-8f95-43a5-9c9a-8118c9a8c688",
+      "name": "Lead Score Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [1220, 520],
+      "parameters": {
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{\"score\":\"High\",\"confidence\":0.92,\"reasoning\":\"Budget, company size, and urgency match the ICP.\",\"recommended_action\":\"Send immediate sales alert.\",\"icp_fit\":[\"Budget fit\",\"Urgent timeline\"]}",
+        "autoFix": false
+      }
+    },
+    {
+      "id": "eb7253f1-4348-4bc2-9e41-fdd7f9ef7d3f",
+      "name": "Prepare Scored Lead",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [1300, 300],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            { "id": "name", "name": "name", "value": "={{ $(\"Normalize Lead Fields\").item.json.name }}", "type": "string" },
+            { "id": "email", "name": "email", "value": "={{ $(\"Normalize Lead Fields\").item.json.email }}", "type": "string" },
+            { "id": "company", "name": "company", "value": "={{ $(\"Normalize Lead Fields\").item.json.company }}", "type": "string" },
+            { "id": "company_size", "name": "company_size", "value": "={{ $(\"Normalize Lead Fields\").item.json.company_size }}", "type": "string" },
+            { "id": "budget", "name": "budget", "value": "={{ $(\"Normalize Lead Fields\").item.json.budget }}", "type": "string" },
+            { "id": "urgency", "name": "urgency", "value": "={{ $(\"Normalize Lead Fields\").item.json.urgency }}", "type": "string" },
+            { "id": "message", "name": "message", "value": "={{ $(\"Normalize Lead Fields\").item.json.message }}", "type": "string" },
+            { "id": "raw_payload", "name": "raw_payload", "value": "={{ $(\"Normalize Lead Fields\").item.json.raw_payload }}", "type": "string" },
+            { "id": "received_at", "name": "received_at", "value": "={{ $(\"Normalize Lead Fields\").item.json.received_at }}", "type": "string" },
+            { "id": "score", "name": "score", "value": "={{ $json.output.score }}", "type": "string" },
+            { "id": "confidence", "name": "confidence", "value": "={{ $json.output.confidence }}", "type": "number" },
+            { "id": "reasoning", "name": "reasoning", "value": "={{ $json.output.reasoning }}", "type": "string" },
+            { "id": "recommended_action", "name": "recommended_action", "value": "={{ $json.output.recommended_action }}", "type": "string" },
+            { "id": "icp_fit", "name": "icp_fit", "value": "={{ ($json.output.icp_fit || []).join(\", \") }}", "type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "88085dfb-f371-439b-93ac-0fecafdf86a8",
+      "name": "High Score?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1560, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "score-high",
+              "leftValue": "={{ $json.score }}",
+              "operator": { "type": "string", "operation": "equals" },
+              "rightValue": "High"
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "5a2dd3be-be5e-4987-98e1-896ecf671d75",
+      "name": "Update Airtable - High Lead",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [1840, 180],
+      "parameters": {
+        "resource": "record",
+        "operation": "upsert",
+        "authentication": "airtableTokenApi",
+        "base": { "__rl": true, "mode": "id", "value": "app_REPLACE_WITH_AIRTABLE_BASE_ID" },
+        "table": { "__rl": true, "mode": "id", "value": "tbl_REPLACE_WITH_LEADS_TABLE_ID" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": ["Email"],
+          "value": {
+            "Name": "={{ $json.name }}",
+            "Email": "={{ $json.email }}",
+            "Company": "={{ $json.company }}",
+            "Company Size": "={{ $json.company_size }}",
+            "Budget": "={{ $json.budget }}",
+            "Urgency": "={{ $json.urgency }}",
+            "Message": "={{ $json.message }}",
+            "Score": "={{ $json.score }}",
+            "Confidence": "={{ $json.confidence }}",
+            "Reasoning": "={{ $json.reasoning }}",
+            "Recommended Action": "={{ $json.recommended_action }}",
+            "ICP Fit": "={{ $json.icp_fit }}",
+            "Status": "High - alerted"
+          },
+          "schema": [
+            { "id": "Name", "displayName": "Name", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Email", "displayName": "Email", "type": "string", "canBeUsedToMatch": true },
+            { "id": "Company", "displayName": "Company", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Company Size", "displayName": "Company Size", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Budget", "displayName": "Budget", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Urgency", "displayName": "Urgency", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Message", "displayName": "Message", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Score", "displayName": "Score", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Confidence", "displayName": "Confidence", "type": "number", "canBeUsedToMatch": false },
+            { "id": "Reasoning", "displayName": "Reasoning", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Recommended Action", "displayName": "Recommended Action", "type": "string", "canBeUsedToMatch": false },
+            { "id": "ICP Fit", "displayName": "ICP Fit", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Status", "displayName": "Status", "type": "string", "canBeUsedToMatch": false }
+          ]
+        },
+        "options": { "typecast": true }
+      }
+    },
+    {
+      "id": "e870a5df-6d3c-462d-ab9f-20e1bf82f4ad",
+      "name": "Alert Sales in Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [2120, 180],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "authentication": "accessToken",
+        "select": "channel",
+        "channelId": { "__rl": true, "mode": "id", "value": "C_REPLACE_WITH_SLACK_CHANNEL_ID" },
+        "messageType": "text",
+        "text": "=*High-fit inbound lead*\n*Name:* {{ $(\"Prepare Scored Lead\").item.json.name }}\n*Email:* {{ $(\"Prepare Scored Lead\").item.json.email }}\n*Company:* {{ $(\"Prepare Scored Lead\").item.json.company }}\n*Score:* {{ $(\"Prepare Scored Lead\").item.json.score }}\n*Reason:* {{ $(\"Prepare Scored Lead\").item.json.reasoning }}\n*Booking:* REPLACE_WITH_BOOKING_LINK",
+        "otherOptions": {
+          "includeLinkToWorkflow": true,
+          "mrkdwn": true
+        }
+      },
+      "webhookId": "ec78504f-8383-4353-adbb-67bce0784513"
+    },
+    {
+      "id": "504ed35a-6263-4927-a11c-152f8c0bb5d7",
+      "name": "Update Airtable - Standard Lead",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [1840, 440],
+      "parameters": {
+        "resource": "record",
+        "operation": "upsert",
+        "authentication": "airtableTokenApi",
+        "base": { "__rl": true, "mode": "id", "value": "app_REPLACE_WITH_AIRTABLE_BASE_ID" },
+        "table": { "__rl": true, "mode": "id", "value": "tbl_REPLACE_WITH_LEADS_TABLE_ID" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": ["Email"],
+          "value": {
+            "Name": "={{ $json.name }}",
+            "Email": "={{ $json.email }}",
+            "Company": "={{ $json.company }}",
+            "Company Size": "={{ $json.company_size }}",
+            "Budget": "={{ $json.budget }}",
+            "Urgency": "={{ $json.urgency }}",
+            "Message": "={{ $json.message }}",
+            "Score": "={{ $json.score }}",
+            "Confidence": "={{ $json.confidence }}",
+            "Reasoning": "={{ $json.reasoning }}",
+            "Recommended Action": "={{ $json.recommended_action }}",
+            "ICP Fit": "={{ $json.icp_fit }}",
+            "Status": "={{ $json.score }}"
+          },
+          "schema": [
+            { "id": "Name", "displayName": "Name", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Email", "displayName": "Email", "type": "string", "canBeUsedToMatch": true },
+            { "id": "Company", "displayName": "Company", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Company Size", "displayName": "Company Size", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Budget", "displayName": "Budget", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Urgency", "displayName": "Urgency", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Message", "displayName": "Message", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Score", "displayName": "Score", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Confidence", "displayName": "Confidence", "type": "number", "canBeUsedToMatch": false },
+            { "id": "Reasoning", "displayName": "Reasoning", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Recommended Action", "displayName": "Recommended Action", "type": "string", "canBeUsedToMatch": false },
+            { "id": "ICP Fit", "displayName": "ICP Fit", "type": "string", "canBeUsedToMatch": false },
+            { "id": "Status", "displayName": "Status", "type": "string", "canBeUsedToMatch": false }
+          ]
+        },
+        "options": { "typecast": true }
+      }
+    },
+    {
+      "id": "b6ecac9d-1b7a-4d2b-a5f5-78c93f6a1b01",
+      "name": "Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [160, 20],
+      "parameters": {
+        "content": "## Workflow Overview\nReceives a lead through an n8n-hosted form, normalizes expected fields, stores the raw lead in Airtable, scores the lead with OpenAI, updates Airtable with the score, and alerts Slack only for High-fit leads.\n\nPrimary path: Form Trigger -> Normalize -> Raw CRM save -> AI qualification -> Score prep -> High Score? -> Airtable/Slack.",
+        "height": 240,
+        "width": 460,
+        "color": 4
+      }
+    },
+    {
+      "id": "df5b1898-90d6-4c8f-8172-399359311223",
+      "name": "Setup Checklist",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [720, 20],
+      "parameters": {
+        "content": "## Setup Checklist\nBefore activation, verify:\n1. Airtable credential is connected.\n2. Airtable base/table point to the Leads table.\n3. Leads table has all mapped fields and Email can be used for upsert matching.\n4. OpenAI credential is connected and model access works.\n5. Slack credential is connected and the bot is in the leads channel.\n6. Replace REPLACE_WITH_BOOKING_LINK in the Slack message.\n7. Open the form test URL, submit a sample lead, and verify both routing paths before activating.",
+        "height": 300,
+        "width": 480,
+        "color": 5
+      }
+    },
+    {
+      "id": "ab10f6fd-15b9-4099-8097-e488f9df1e9f",
+      "name": "Process Watchouts",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1340, 20],
+      "parameters": {
+        "content": "## Process Watchouts\n- The form field names must stay aligned with normalization: name, email, company, company_size, budget, urgency, and message.\n- Raw lead data is saved before AI scoring for auditability.\n- AI must return score, confidence, reasoning, recommended_action, and icp_fit.\n- High leads alert Slack; Medium/Low leads only update Airtable.\n- Keep the workflow inactive until the booking link and a successful end-to-end test are complete.",
+        "height": 280,
+        "width": 480,
+        "color": 6
+      }
+    }
+  ],
+  "nodeGroups": [
+    {
+      "name": "Normalize and Raw Capture",
+      "nodeNames": ["Normalize Lead Fields", "Store Raw Lead in Airtable"],
+      "description": "Standardizes form data and saves the raw lead before AI scoring."
+    },
+    {
+      "name": "AI Qualification",
+      "nodeNames": ["Qualify Lead with AI", "OpenAI Lead Scoring Model", "Lead Score Parser"],
+      "description": "Scores the lead with structured OpenAI output."
+    },
+    {
+      "name": "High Lead Alert Path",
+      "nodeNames": ["Update Airtable - High Lead", "Alert Sales in Slack"],
+      "description": "Updates CRM and alerts Slack when score is High."
+    },
+    {
+      "name": "Standard Lead Path",
+      "nodeNames": ["Update Airtable - Standard Lead"],
+      "description": "Updates CRM for Medium or Low leads."
+    }
+  ],
+  "connections": {
+    "Lead Intake Form": { "main": [[{ "node": "Normalize Lead Fields", "type": "main", "index": 0 }]] },
+    "Normalize Lead Fields": { "main": [[{ "node": "Store Raw Lead in Airtable", "type": "main", "index": 0 }]] },
+    "Store Raw Lead in Airtable": { "main": [[{ "node": "Qualify Lead with AI", "type": "main", "index": 0 }]] },
+    "Qualify Lead with AI": { "main": [[{ "node": "Prepare Scored Lead", "type": "main", "index": 0 }]] },
+    "OpenAI Lead Scoring Model": { "ai_languageModel": [[{ "node": "Qualify Lead with AI", "type": "ai_languageModel", "index": 0 }]] },
+    "Lead Score Parser": { "ai_outputParser": [[{ "node": "Qualify Lead with AI", "type": "ai_outputParser", "index": 0 }]] },
+    "Prepare Scored Lead": { "main": [[{ "node": "High Score?", "type": "main", "index": 0 }]] },
+    "High Score?": {
+      "main": [
+        [{ "node": "Update Airtable - High Lead", "type": "main", "index": 0 }],
+        [{ "node": "Update Airtable - Standard Lead", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Airtable - High Lead": { "main": [[{ "node": "Alert Sales in Slack", "type": "main", "index": 0 }]] },
+    "Update Airtable - Standard Lead": { "main": [[]] }
+  }
+}
